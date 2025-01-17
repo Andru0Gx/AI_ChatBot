@@ -1,0 +1,176 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { Bot } from "lucide-react";
+---
+
+<Layout>
+    <section class="rounded-2xl overflow-hidden bg-slate-800 p-3 m-5">
+        <div
+            class="bg-slate-900 h-[30rem] md:w-[32rem] transition-all duration-300 overflow-y-auto rounded-xl"
+            id="chat"
+        >
+            <div
+                class="flex flex-col space-y-5 p-5 h-96 justify-center items-center"
+            >
+                <div
+                    class="size-32 rounded-full bg-white flex justify-center items-center"
+                >
+                    <Bot size="96" color="#161616" />
+                </div>
+                <p class="text-white font-bold text-2xl text-center">
+                    Hello there! I'm <span class="text-green-500">TestBot</span>
+                    <br />I'm here to be tested by you!
+                </p>
+            </div>
+        </div>
+        <div
+            class="bg-slate-800 h-20 md:w-[32rem] flex space-x-5 justify-center items-center"
+        >
+            <input
+                type="text"
+                class="md:w-[25.5rem] w-56 p-2 rounded-lg text-[#23272e] placeholder:text-[#23272e]"
+                placeholder="Type something..."
+                id="input"
+            />
+            <button
+                class="bg-white size-10 rounded-full flex justify-center items-center xl:hidden"
+                id="send"
+            >
+                ☝️
+            </button>
+        </div>
+    </section>
+</Layout>
+
+<style>
+    #chat {
+        scrollbar-color: #22c55e transparent;
+        scrollbar-width: thin;
+    }
+</style>
+
+<script>
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    const chat = document.getElementById("chat") as HTMLDivElement;
+    const send = document.getElementById("send") as HTMLButtonElement;
+    const input = document.getElementById("input") as HTMLInputElement;
+
+    const dolarapi = fetch("https://ve.dolarapi.com/v1/dolares")
+        .then((response) => response.json())
+        .then((data) => {
+            const oficial = data.find(
+                (item: { fuente: string }) => item.fuente === "oficial"
+            );
+            if (oficial) {
+                const tasadolar = oficial.promedio;
+                return tasadolar;
+            } else {
+                console.log("No se encontró el valor oficial.");
+            }
+        });
+
+    const genAI = new GoogleGenerativeAI(import.meta.env.PUBLIC_GENAI_API_KEY);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        systemInstruction: ` Eres un asistente de compras en linea para la empresa FerreMateriales Madrid, es una empresa de ferretería dedicada a la venta de materiales de construcción, ferretería y bricolaje, estan ubicados en Carrera 5, cerca de la Plaza Bolívar a 20M de la Wrangler. Maturín, Estado Monagas, Venezuela. Tu tarea es ayudar a los clientes a encontrar los productos que necesitan dentro de la Web. Por favor, responde a las preguntas de los clientes de la mejor manera posible. Si no sabes la respuesta, puedes decir 'Una disculpa, no comprendo lo que dices'. recuerda responder de manera clara y precisa, las respuestas deben ser cortas y concisas.
+    
+		En caso de que el usuario este interesado en alguno de los productos que le recomendaste, suministale el link del producto para que pueda realizar la compra en forma de <a class="text-white font-bold underline" href="https://ferre-materiales-madrid.vercel.app/product/ID_DEL_PRODUCTO_HASHEADO">Link del Producto</a> 
+
+
+		en caso de que el producto que el usuario esta buscando no se encuentre en el inventario, entonces dile que no tenemos pero que puede preguntar por otros productos y en caso de que exista un producto similar, recomiendale ese producto.
+		en caso de que el usuario te diga que quiere saber acerca de algun producto y ese sea el unico producto que tenemos en el inventario, dile que si tenemos el producto y suministrale el link del producto para que pueda realizar la compra.
+		en caso de que existan varios marcas del mismo producto, entonces dile al usuario que tenemos varias marcas del producto y muestrale los links de las marcas para que pueda realizar la compra.
+
+		no hagas tantas preguntas al usuario, solo responde de manera clara y precisa a lo que te pregunte y en caso de que quiera saber algo mas, entonces preguntale que es lo que desea saber.
+
+		la lista de productos de la base de datos es: [lista de productos]
+
+		en caso de que el usuario te pregunte por el precio, dile el precio en $ y en bolivares.
+
+		los precios de la lista estan en Dolares, la tasa de cambio en bolivares es de ${await dolarapi} Bs por dolar.
+		
+		TODOS LOS MENSAJES QUE VAS A DEVOLVER VAN A SER UN HTML CON UNA ETIQUETA P, NO DEVUELVAS UN TEXTO PLANO, Y PONLE LA SIGUIENTE CLASE A LA ETIQUETA P:
+		text-white px-5
+
+		SOLAMENTE TIENES EL PERMISO DE CREAR ETIQUETAS P Y ETIQUETAS A.
+
+		`,
+    });
+
+    send.addEventListener("click", async () => {
+        askBot();
+    });
+
+    // cuando el usuario pulse ENTER en el input
+    input.addEventListener("keydown", async (e) => {
+        if (e.key === "Enter") {
+            askBot();
+        }
+    });
+
+    async function askBot() {
+        const prompt = input.value;
+        const result = await model.generateContent(prompt);
+        input.value = "";
+
+        const userMessage = createMessageElement(prompt, "user");
+        const botMessage = createMessageElement(result.response.text(), "bot");
+
+        // formatear el mensaje del bot, eliminando ```html y ``` del principio y final
+        const botMessageformat = result.response
+            .text()
+            .replace(/^```html/, "")
+            .replace(/```/, "");
+
+        const botMessagefinal = createMessageElement(botMessageformat, "bot");
+
+        chat.appendChild(userMessage);
+        chat.appendChild(botMessagefinal);
+
+        scrollToBottom();
+        console.log(botMessage);
+        console.log(botMessageformat);
+    }
+
+    function createMessageElement(text: string, sender: string) {
+        const div = document.createElement("div");
+        div.className = "flex items-start p-5 border-t-2 border-slate-600 ";
+
+        const iconDiv = document.createElement("div");
+        iconDiv.className =
+            "min-w-10 h-10 rounded-full bg-white flex justify-center items-center";
+
+        const icon = document.createElement("span");
+        if (sender === "user") {
+            icon.innerHTML =
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+        } else {
+            icon.innerHTML =
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
+        }
+        iconDiv.appendChild(icon);
+
+        const message = document.createElement("p");
+        message.className = "text-white px-5";
+        message.textContent = text;
+
+        div.appendChild(iconDiv);
+
+        if (sender === "user") {
+            div.appendChild(message);
+        } else {
+            div.innerHTML += text;
+        }
+
+        return div;
+    }
+
+    function scrollToBottom() {
+        //scroll smooth
+        chat.scrollTo({
+            top: chat.scrollHeight,
+            behavior: "smooth",
+        });
+    }
+</script>

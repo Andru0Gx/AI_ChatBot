@@ -66,21 +66,7 @@ import { Bot } from "lucide-react";
     const send = document.getElementById("send") as HTMLButtonElement;
     const input = document.getElementById("input") as HTMLInputElement;
 
-    const dolarapi = fetch("https://ve.dolarapi.com/v1/dolares")
-        .then((response) => response.json())
-        .then((data) => {
-            const oficial = data.find(
-                (item: { fuente: string }) => item.fuente === "oficial"
-            );
-            if (oficial) {
-                const tasadolar = oficial.promedio;
-                return tasadolar;
-            } else {
-                console.log("No se encontró el valor oficial.");
-            }
-        });
-
-    const genAI = new GoogleGenerativeAI(import.meta.env.PUBLIC_GENAI_API_KEY);
+    const genAI = new GoogleGenerativeAI(import.meta.env.GENAI_API_KEY);
     const model = genAI.getGenerativeModel({
         model: "gemini-1.5-flash",
         systemInstruction: `

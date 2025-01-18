@@ -96,8 +96,6 @@ import { Bot } from "lucide-react";
 		
 		TODOS LOS MENSAJES QUE VAS A DEVOLVER VAN A SER UN HTML CON UNA ETIQUETA P, NO DEVUELVAS UN TEXTO PLANO
 
-        AGREGALE ESTILOS A LOS MENSAJES QUE VAS A DEVOLVER, PUEDES USAR CLASES DE TAILWINDCSS PARA DAR ESTILOS A LOS MENSAJES.
-
 		SOLAMENTE TIENES EL PERMISO DE CREAR ETIQUETAS <p> <a> <br>.
 
         LAS RESPUESTAS NO DEBEN SER MUY LARGAS Y DEBEN SER LLAMATIVAS PARA EL USUARIO, QUE SEAN FACIL DE LEER Y ENTENDER.
@@ -169,24 +167,6 @@ import { Bot } from "lucide-react";
         const result = await modelchat.sendMessage(prompt);
         input.value = "";
 
-        const userin = {
-            role: "user",
-            parts: [{ text: prompt }],
-        };
-
-        const botin = {
-            role: "model",
-            parts: [{ text: result.response.text() }],
-        };
-
-        // guardar el historial en el sessionStorage
-
-        sessionStorage.setItem("history", JSON.stringify(history));
-
-        history.push(userin, botin);
-
-        insertdb(history);
-
         const userMessage = createMessageElement(prompt, "user");
 
         // formatear el mensaje del bot, eliminando ```html y ``` del principio y final
@@ -196,6 +176,24 @@ import { Bot } from "lucide-react";
             .replace(/```/, "");
 
         const botMessagefinal = createMessageElement(botMessageformat, "bot");
+
+        const userin = {
+            role: "user",
+            parts: [{ text: prompt }],
+        };
+
+        const botin = {
+            role: "model",
+            parts: [{ text: botMessageformat }],
+        };
+
+        // guardar el historial en el sessionStorage
+
+        sessionStorage.setItem("history", JSON.stringify(history));
+
+        history.push(userin, botin);
+
+        insertdb(history);
 
         chat.appendChild(userMessage);
         chat.appendChild(botMessagefinal);

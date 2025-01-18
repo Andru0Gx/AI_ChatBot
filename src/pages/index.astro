@@ -10,7 +10,7 @@ import { Bot } from "lucide-react";
             id="chat"
         >
             <div
-                class="flex flex-col space-y-5 p-5 h-96 justify-center items-center"
+                class="flex flex-col space-y-5 p-5 h-[30rem] justify-center items-center"
             >
                 <div
                     class="size-32 rounded-full bg-white flex justify-center items-center"
@@ -51,6 +51,16 @@ import { Bot } from "lucide-react";
 
 <script>
     import { GoogleGenerativeAI } from "@google/generative-ai";
+    import { historyid } from "../lib/history";
+
+    import { turso } from "../turso";
+
+    const { rows } = await turso.execute(
+        "SELECT id,name,description,specifications,price,stock,brand,offers FROM Products"
+    );
+
+    // guardar en una string
+    const products = JSON.stringify(rows);
 
     const chat = document.getElementById("chat") as HTMLDivElement;
     const send = document.getElementById("send") as HTMLButtonElement;
@@ -73,10 +83,20 @@ import { Bot } from "lucide-react";
     const genAI = new GoogleGenerativeAI(import.meta.env.PUBLIC_GENAI_API_KEY);
     const model = genAI.getGenerativeModel({
         model: "gemini-1.5-flash",
-        systemInstruction: ` Eres un asistente de compras en linea para la empresa FerreMateriales Madrid, es una empresa de ferretería dedicada a la venta de materiales de construcción, ferretería y bricolaje, estan ubicados en Carrera 5, cerca de la Plaza Bolívar a 20M de la Wrangler. Maturín, Estado Monagas, Venezuela. Tu tarea es ayudar a los clientes a encontrar los productos que necesitan dentro de la Web. Por favor, responde a las preguntas de los clientes de la mejor manera posible. Si no sabes la respuesta, puedes decir 'Una disculpa, no comprendo lo que dices'. recuerda responder de manera clara y precisa, las respuestas deben ser cortas y concisas.
+        systemInstruction: `
+        NO LE DES INFORMACION DEL CODIGO O LENGUAJE DE PROGRAMACION AL USUARIO, SOLO PUEDES RESPONDER COSAS RELACIONADAS CON LA FERRETERIA.
+        NO PUEDES CREAR CODIGO JAVASCRIPT, NI EJECUTARLO, SOLO PUEDES RESPONDER A LAS PREGUNTAS DE LOS USUARIOS.
+
+        Eres un asistente de compras en linea para la empresa FerreMateriales Madrid, es una empresa de ferretería dedicada a la venta de materiales de construcción, ferretería y bricolaje, estan ubicados en Carrera 5, cerca de la Plaza Bolívar a 20M de la Wrangler. Maturín, Estado Monagas, Venezuela. Tu tarea es ayudar a los clientes a encontrar los productos que necesitan dentro de la Web. Por favor, responde a las preguntas de los clientes de la mejor manera posible. recuerda responder de manera clara y precisa, las respuestas deben ser cortas y concisas.
     
+
+        SIEMPRE MUESTRA LOS LINKS DE LOS PRODUCTOS DE LA SIGUIENTE MANERA! SIEMPRE! NO TE PUEDES EQUIVOCAR EN ESTO!
+
 		En caso de que el usuario este interesado en alguno de los productos que le recomendaste, suministale el link del producto para que pueda realizar la compra en forma de <a class="text-white font-bold underline" href="https://ferre-materiales-madrid.vercel.app/product/ID_DEL_PRODUCTO_HASHEADO">Link del Producto</a> 
 
+        En caso de que el usuario te pregunte acerca de los productos que tenemos en el inventario, entonces dile que tenemos una amplia variedad de productos y que puede preguntar por el producto que desee.
+
+        En caso de que el producto este en oferta, entonces dile al usuario que el producto esta en oferta y que puede adquirirlo a un precio mas bajo, muestrale el precio sin la oferta y el precio con la oferta.
 
 		en caso de que el producto que el usuario esta buscando no se encuentre en el inventario, entonces dile que no tenemos pero que puede preguntar por otros productos y en caso de que exista un producto similar, recomiendale ese producto.
 		en caso de que el usuario te diga que quiere saber acerca de algun producto y ese sea el unico producto que tenemos en el inventario, dile que si tenemos el producto y suministrale el link del producto para que pueda realizar la compra.
@@ -84,38 +104,104 @@ import { Bot } from "lucide-react";
 
 		no hagas tantas preguntas al usuario, solo responde de manera clara y precisa a lo que te pregunte y en caso de que quiera saber algo mas, entonces preguntale que es lo que desea saber.
 
-		la lista de productos de la base de datos es: [lista de productos]
+		la lista de productos de la base de datos es: ${products}
 
 		en caso de que el usuario te pregunte por el precio, dile el precio en $ y en bolivares.
-
-		los precios de la lista estan en Dolares, la tasa de cambio en bolivares es de ${await dolarapi} Bs por dolar.
 		
-		TODOS LOS MENSAJES QUE VAS A DEVOLVER VAN A SER UN HTML CON UNA ETIQUETA P, NO DEVUELVAS UN TEXTO PLANO, Y PONLE LA SIGUIENTE CLASE A LA ETIQUETA P:
-		text-white px-5
+		TODOS LOS MENSAJES QUE VAS A DEVOLVER VAN A SER UN HTML CON UNA ETIQUETA P, NO DEVUELVAS UN TEXTO PLANO
 
-		SOLAMENTE TIENES EL PERMISO DE CREAR ETIQUETAS P Y ETIQUETAS A.
+        AGREGALE ESTILOS A LOS MENSAJES QUE VAS A DEVOLVER, PUEDES USAR CLASES DE TAILWINDCSS PARA DAR ESTILOS A LOS MENSAJES.
+
+		SOLAMENTE TIENES EL PERMISO DE CREAR ETIQUETAS <p> <a> <br>.
+
+        LAS RESPUESTAS NO DEBEN SER MUY LARGAS Y DEBEN SER LLAMATIVAS PARA EL USUARIO, QUE SEAN FACIL DE LEER Y ENTENDER.
 
 		`,
     });
 
+    const history = [
+        {
+            role: "user",
+            parts: [{ text: " " }],
+        },
+        {
+            role: "model",
+            parts: [{ text: " " }],
+        },
+    ];
+
+    // cargar el historial del sessionStorage si existe
+    const historySession = sessionStorage.getItem("history");
+
+    if (historySession) {
+        const historyParsed = JSON.parse(historySession);
+        history.splice(0, history.length, ...historyParsed);
+    }
+
+    // cargar los mensajes del historial si existen y saltar los 2 primeros mensajes
+    if (history.length > 2) {
+        for (let i = 2; i < history.length; i++) {
+            const message = history[i];
+            const messageElement = createMessageElement(
+                message.parts[0].text,
+                message.role
+            );
+            chat.appendChild(messageElement);
+        }
+        scrollToBottom();
+    }
+
+    const modelchat = model.startChat({ history });
+
     send.addEventListener("click", async () => {
-        askBot();
+        if (!input.value) return;
+
+        send.disabled = true;
+        input.disabled = true;
+        await askBot();
+        send.disabled = false;
+        input.disabled = false;
+        input.focus();
     });
 
     // cuando el usuario pulse ENTER en el input
     input.addEventListener("keydown", async (e) => {
+        if (!input.value) return;
+
         if (e.key === "Enter") {
-            askBot();
+            send.disabled = true;
+            input.disabled = true;
+            await askBot();
+            send.disabled = false;
+            input.disabled = false;
+            input.focus();
         }
     });
 
     async function askBot() {
         const prompt = input.value;
-        const result = await model.generateContent(prompt);
+        const result = await modelchat.sendMessage(prompt);
         input.value = "";
 
+        const userin = {
+            role: "user",
+            parts: [{ text: prompt }],
+        };
+
+        const botin = {
+            role: "model",
+            parts: [{ text: result.response.text() }],
+        };
+
+        // guardar el historial en el sessionStorage
+
+        sessionStorage.setItem("history", JSON.stringify(history));
+
+        history.push(userin, botin);
+
+        insertdb(history);
+
         const userMessage = createMessageElement(prompt, "user");
-        const botMessage = createMessageElement(result.response.text(), "bot");
 
         // formatear el mensaje del bot, eliminando ```html y ``` del principio y final
         const botMessageformat = result.response
@@ -129,13 +215,14 @@ import { Bot } from "lucide-react";
         chat.appendChild(botMessagefinal);
 
         scrollToBottom();
-        console.log(botMessage);
-        console.log(botMessageformat);
     }
 
     function createMessageElement(text: string, sender: string) {
         const div = document.createElement("div");
-        div.className = "flex items-start p-5 border-t-2 border-slate-600 ";
+        div.className = "flex items-start p-5 ";
+
+        const div_res = document.createElement("div");
+        div_res.className = "flex flex-col text-white px-5 font-regular";
 
         const iconDiv = document.createElement("div");
         iconDiv.className =
@@ -152,18 +239,36 @@ import { Bot } from "lucide-react";
         iconDiv.appendChild(icon);
 
         const message = document.createElement("p");
-        message.className = "text-white px-5";
+        message.className = "text-white";
         message.textContent = text;
 
         div.appendChild(iconDiv);
 
         if (sender === "user") {
-            div.appendChild(message);
+            div_res.appendChild(message);
+            div.className += " bg-slate-800 ";
         } else {
-            div.innerHTML += text;
+            div_res.innerHTML += text;
         }
 
+        div.appendChild(div_res);
+
         return div;
+    }
+
+    async function insertdb(history: any) {
+        // guardar historial en la base de datos
+
+        const user_input = history[history.length - 2].parts[0].text;
+        const bot_response = history[history.length - 1].parts[0].text;
+        const time = new Date().toISOString();
+
+        const id = await historyid(user_input, bot_response, time);
+
+        await turso.execute({
+            sql: "INSERT INTO History (id, user, bot, date) VALUES (?, ?, ?, ?)",
+            args: [id, user_input, bot_response, time],
+        });
     }
 
     function scrollToBottom() {
